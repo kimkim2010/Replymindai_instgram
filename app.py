@@ -3,7 +3,7 @@ import os
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
 @app.route("/", methods=["GET"])
 def home():
@@ -15,6 +15,10 @@ def verify():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
+    print("MODE:", mode)
+    print("TOKEN:", token)
+    print("EXPECTED:", VERIFY_TOKEN)
+
     if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
     else:
@@ -23,8 +27,5 @@ def verify():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-    print("Received:", data)
+    print("Incoming event:", data)
     return "EVENT_RECEIVED", 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
