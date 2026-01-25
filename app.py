@@ -11,6 +11,16 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+@app.route("/privacy", methods=["GET"])
+def privacy():
+    return """
+    <h1>Privacy Policy - ReplyMindAI</h1>
+    <p>ReplyMindAI does not store personal data.</p>
+    <p>Messages are processed automatically to generate responses.</p>
+    <p>No data is shared with third parties.</p>
+    <p>Contact: your@email.com</p>
+    """
+
 @app.route("/", methods=["GET"])
 def home():
     return "ReplyMindAI running 😈🔥"
