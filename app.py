@@ -5,20 +5,19 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# ====== Environment Variables ======
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ====== Home ======
+
 @app.route("/", methods=["GET"])
 def home():
-    return "ReplyMindAI Messenger Bot Running 🚀"
+    return "Bot Running 🚀"
 
 
-# ====== Webhook Verification ======
+# ===== Webhook Verification =====
 @app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
@@ -30,51 +29,52 @@ def verify():
     return "Verification failed", 403
 
 
-# ====== Webhook Receiver ======
+# ===== Webhook Receiver =====
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
     print("Incoming:", data)
 
+    # ===== Messenger (Facebook Page) =====
     if data.get("object") == "page":
         for entry in data.get("entry", []):
-            for messaging_event in entry.get("messaging", []):
-                if messaging_event.get("message"):
-                    sender_id = messaging_event["sender"]["id"]
-                    message_text = messaging_event["message"].get("text")
+            for event in entry.get("messaging", []):
+                if event.get("message"):
+                    sender_id = event["sender"]["id"]
+                    text = event["message"].get("text")
+                    if text:
+                        reply = generate_reply(text)
+                        send_message(sender_id, reply)
 
-                    if message_text:
-                        reply = generate_ai_reply(message_text)
+    # ===== Instagram =====
+    if data.get("object") == "instagram":
+        for entry in data.get("entry", []):
+            for event in entry.get("messaging", []):
+                if event.get("message"):
+                    sender_id = event["sender"]["id"]
+                    text = event["message"].get("text")
+                    if text:
+                        reply = generate_reply(text)
                         send_message(sender_id, reply)
 
     return "ok", 200
 
 
-# ====== OpenAI Reply ======
-def generate_ai_reply(user_message):
+def generate_reply(user_message):
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "أنت مساعد ذكي احترافي يرد بأسلوب واثق، مختصر، وجذاب."
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
+                {"role": "system", "content": "أنت مساعد احترافي يرد بثقة وبأسلوب جذاب."},
+                {"role": "user", "content": user_message}
             ]
         )
-
         return response.choices[0].message.content
-
     except Exception as e:
         print("OpenAI error:", e)
-        return "حدث خطأ مؤقت، حاول لاحقاً."
+        return "حدث خطأ مؤقت."
 
 
-# ====== Send Message to Messenger ======
 def send_message(recipient_id, message_text):
     url = f"https://graph.facebook.com/v19.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
 
