@@ -113,7 +113,7 @@ def webhook():
                 item = val.get("item")
 
                 # نتأكد أنه تعليق (أفضلية)
-                if item not in ["comment", "post"] and not comment_id:
+               if item != "comment":
                     continue
 
                 if not comment_id or not comment_text:
