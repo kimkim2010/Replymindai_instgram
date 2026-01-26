@@ -5,25 +5,20 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# ====== ENV VARIABLES ======
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# ====== Environment Variables ======
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-print("VERIFY_TOKEN:", VERIFY_TOKEN)
-print("PAGE_ACCESS_TOKEN موجود؟", "YES" if PAGE_ACCESS_TOKEN else "NO")
-
-# ====== OpenAI ======
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-
-# ====== HOME ======
+# ====== Home ======
 @app.route("/", methods=["GET"])
 def home():
-    return "ReplyMindAI running 🚀"
+    return "ReplyMindAI Messenger Bot Running 🚀"
 
 
-# ====== WEBHOOK VERIFICATION ======
+# ====== Webhook Verification ======
 @app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
@@ -35,21 +30,16 @@ def verify():
     return "Verification failed", 403
 
 
-# ====== RECEIVE MESSAGES ======
+# ====== Webhook Receiver ======
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
     print("Incoming:", data)
 
-    if data.get("object") == "instagram":
+    if data.get("object") == "page":
         for entry in data.get("entry", []):
             for messaging_event in entry.get("messaging", []):
-
-                # تجاهل الرسائل المرتدة من البوت نفسه
-                if (
-                    "message" in messaging_event
-                    and not messaging_event["message"].get("is_echo")
-                ):
+                if messaging_event.get("message"):
                     sender_id = messaging_event["sender"]["id"]
                     message_text = messaging_event["message"].get("text")
 
@@ -60,7 +50,7 @@ def webhook():
     return "ok", 200
 
 
-# ====== OPENAI REPLY ======
+# ====== OpenAI Reply ======
 def generate_ai_reply(user_message):
     try:
         response = client.chat.completions.create(
@@ -68,7 +58,7 @@ def generate_ai_reply(user_message):
             messages=[
                 {
                     "role": "system",
-                    "content": "أنت مساعد ذكي احترافي يرد بأسلوب واثق، جذاب، ومقنع ويعكس عقلية شركة قوية."
+                    "content": "أنت مساعد ذكي احترافي يرد بأسلوب واثق، مختصر، وجذاب."
                 },
                 {
                     "role": "user",
@@ -81,27 +71,21 @@ def generate_ai_reply(user_message):
 
     except Exception as e:
         print("OpenAI error:", e)
-        return "حدث خطأ مؤقت، حاول مرة أخرى لاحقاً."
+        return "حدث خطأ مؤقت، حاول لاحقاً."
 
 
-# ====== SEND MESSAGE TO INSTAGRAM ======
+# ====== Send Message to Messenger ======
 def send_message(recipient_id, message_text):
-    url = "https://graph.facebook.com/v19.0/me/messages"
-
-    params = {
-        "access_token": PAGE_ACCESS_TOKEN
-    }
+    url = f"https://graph.facebook.com/v19.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
 
     payload = {
         "recipient": {"id": recipient_id},
         "message": {"text": message_text}
     }
 
-    response = requests.post(url, params=params, json=payload)
-
+    response = requests.post(url, json=payload)
     print("Send response:", response.text)
 
 
-# ====== RUN ======
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run()
