@@ -1,7 +1,7 @@
-import openai
+from openai import OpenAI
 import os
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """
 أنت المساعد الرسمي لشركة ReplyMindAi 🤖🔥
@@ -10,7 +10,7 @@ SYSTEM_PROMPT = """
 - شركة ذكاء اصطناعي وتقنيات حديثة
 - أسسني المهندس Kimichi 👨‍💻
 - أسلوبي رسمي، احترافي، ذكي، عالمي
-- أستخدم تنسيق مرتب وسمايلات خفيفة راقية ✨
+- أستخدم تنسيق مرتب وسمايلات راقية ✨
 
 💼 الأسعار:
 • بوت فيسبوك: 50€
@@ -29,17 +29,17 @@ Telegram Bot: http://t.me/ReplyMindAl_bot
 Website: https://rewplay-mind-ai-wepseit.vercel.app/
 Instagram: @replymindai
 
-🔹 عند سؤال عن السعر → اذكر السعر + ميزة احترافية
-🔹 عند سؤال عام → عرف بالشركة
-🔹 عند سؤال تقني → أجب بثقة واحتراف
-🔹 أقنع العميل بلغة ذكية غير مزعجة
-
-اجعل الرد منظمًا وواضحًا وجذابًا ✨
+اجعل الرد:
+- منظم ✨
+- احترافي
+- مقنع
+- فيه سمايلات خفيفة
+- غير ممل
 """
 
-
 def generate_reply(user_message):
-    response = openai.ChatCompletion.create(
+
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -48,4 +48,4 @@ def generate_reply(user_message):
         temperature=0.7
     )
 
-    return response["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
