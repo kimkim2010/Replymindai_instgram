@@ -1,91 +1,66 @@
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+SYSTEM_PROMPT = """
+You are ReplyMindAI official sales assistant.
+
+Company Name: ReplyMindAI
+Founder: Engineer Kimichi
+
+You are a highly intelligent, professional, modern AI assistant.
+You represent a global AI technology company.
+
+Tone:
+- Professional
+- Confident
+- Persuasive
+- Smart
+- Modern
+- Business-level
+
+If someone asks about prices, answer clearly:
+
+Facebook Bot: 50€
+Instagram Bot: 50€
+Telegram Bot: 30€
+WhatsApp Bot: 50€
+
+Offers:
+Instagram + Facebook: 90€
+Instagram + Facebook + WhatsApp: 130€
+
+If someone asks who created you:
+"I was developed by Engineer Kimichi, founder of ReplyMindAI."
+
+If someone wants to purchase:
+Provide:
+
+WhatsApp: +1 (615) 425-1716
+Email: replyrindai@gmail.com
+Telegram Bot: http://t.me/ReplyMindAl_bot
+Website: https://rewplay-mind-ai-wepseit.vercel.app/
+Instagram: @replymindai
+
+Be persuasive and explain why ReplyMindAI is premium,
+trusted, intelligent, and future-ready.
+
+Always answer in the same language as the user.
+"""
+
 def sales_ai(user_message):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.7
+        )
 
-    msg = user_message.lower()
+        return response.choices[0].message.content
 
-    # ===== الترحيب =====
-    if any(word in msg for word in ["مرحبا", "اهلا", "hello", "hi"]):
-        return """
-مرحباً بك في ReplyMindAI 👋
-
-نحن شركة متخصصة في تطوير بوتات الذكاء الاصطناعي والأتمتة الذكية للأعمال.
-
-كيف يمكنني مساعدتك اليوم؟
-هل ترغب بمعرفة الأسعار أم تفاصيل الخدمات؟
-"""
-
-    # ===== الأسعار =====
-    elif any(word in msg for word in ["سعر", "اسعار", "كم", "تكلفة"]):
-        return """
-💰 الأسعار الرسمية:
-
-📘 Facebook Bot: 50€
-📸 Instagram Bot: 50€
-🤖 Telegram Bot: 30€
-📱 WhatsApp Bot: 50€
-
-🔥 العروض الخاصة:
-Instagram + Facebook = 90€
-Instagram + Facebook + WhatsApp = 130€
-
-جميع البوتات تعمل بالذكاء الاصطناعي وقابلة للتخصيص حسب نشاطك.
-
-هل ترغب بالبدء الآن؟ 🚀
-"""
-
-    # ===== لماذا نحن =====
-    elif any(word in msg for word in ["ليش", "لماذا", "وش يميزكم"]):
-        return """
-لماذا ReplyMindAI؟ 👑
-
-✔ ذكاء اصطناعي متطور
-✔ تصميم احترافي عالمي
-✔ دعم تقني مباشر
-✔ سرعة تنفيذ
-✔ أنظمة مبيعات ذكية
-
-نحن لا نبيع بوت فقط…
-نحن نبني لك نظام نمو حقيقي لعملك 🚀
-"""
-
-    # ===== من المؤسس =====
-    elif "مؤسس" in msg:
-        return """
-تم تأسيس ReplyMindAI على يد المهندس Kimichi 👨‍💻
-وهو مختص في تقنيات الذكاء الاصطناعي والحلول البرمجية المتقدمة.
-"""
-
-    # ===== تواصل =====
-    elif any(word in msg for word in ["تواصل", "رقم", "واتس", "ايميل"]):
-        return """
-📞 للتواصل المباشر:
-
-WhatsApp:
-+1 (615) 425-1716
-
-Email:
-replyrindai@gmail.com
-
-🌐 Website:
-https://rewplay-mind-ai-wepseit.vercel.app/
-
-🤖 Telegram:
-http://t.me/ReplyMindAl_bot
-
-📸 Instagram:
-@replymindai
-
-نحن بانتظارك 🚀
-"""
-
-    # ===== رد احترافي افتراضي =====
-    else:
-        return """
-يسعدني مساعدتك 🤝
-
-هل ترغب بمعرفة:
-• الأسعار؟
-• تفاصيل الخدمات؟
-• أو تريد عرض مخصص لنشاطك؟
-
-أنا هنا لخدمتك 24/7 🚀
-"""
+    except Exception as e:
+        return "نعتذر، حدث خطأ مؤقت. يرجى المحاولة لاحقًا."
