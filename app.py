@@ -1,52 +1,38 @@
 from flask import Flask, request
 import os
 import requests
-import threading
 import time
 from sales_ai import generate_reply
 
 app = Flask(__name__)
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
-PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN")
 
-# منع تكرار معالجة نفس الحدث
+# منع تكرار الأحداث
 SEEN = {}
-SEEN_TTL = 120  # ثواني
+SEEN_TTL = 120
 
-def remember(key: str) -> bool:
-    """يرجع True إذا هذه أول مرة نشوف الحدث، False إذا مكرر"""
+
+def remember(key):
     now = time.time()
-    # تنظيف قديم
-    for k, ts in list(SEEN.items()):
-        if now - ts > SEEN_TTL:
-            SEEN.pop(k, None)
+    for k in list(SEEN.keys()):
+        if now - SEEN[k] > SEEN_TTL:
+            del SEEN[k]
+
     if key in SEEN:
         return False
+
     SEEN[key] = now
     return True
 
 
 # ===============================
-# 🛡️ Keep Alive (Self Ping)
-# ===============================
-def keep_alive():
-    while True:
-        try:
-            if RENDER_URL:
-                requests.get(RENDER_URL, timeout=10)
-        except:
-            pass
-        time.sleep(300)  # كل 5 دقائق
-
-
-# ===============================
-# 🏠 Home (لتفادي 404 + صحة السيرفر)
+# 🏠 Health check
 # ===============================
 @app.route("/", methods=["GET"])
 def home():
-    return "ReplyMindAI running ✅", 200
+    return "ReplyMindAI Running ✅", 200
 
 
 # ===============================
@@ -60,62 +46,62 @@ def verify():
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
         return challenge, 200
+
     return "Verification failed", 403
 
 
 # ===============================
-# 📩 Webhook Receiver (DM + Comments)
+# 📩 Webhook Receiver
 # ===============================
-print("🔥 WEBHOOK DATA:", data)
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json(silent=True) or {}
+
+    data = request.get_json(silent=True)
+    print("🔥 WEBHOOK DATA:", data)
+
+    if not data:
+        return "OK", 200
 
     if data.get("object") != "page":
         return "OK", 200
 
     for entry in data.get("entry", []):
 
-        # ====== DM (Messenger Inbox) ======
+        # ====== رسائل خاصة ======
         if "messaging" in entry:
-            for event in entry.get("messaging", []):
+            for event in entry["messaging"]:
 
-                # تجاهل echoes
                 if event.get("message", {}).get("is_echo"):
                     continue
 
-                msg = event.get("message", {})
-                text = msg.get("text")
-                if not text:
-                    continue
-
+                text = event.get("message", {}).get("text")
                 sender_id = event.get("sender", {}).get("id")
-                mid = msg.get("mid", f"{sender_id}:{hash(text)}")
 
-                if not sender_id:
+                if not text or not sender_id:
                     continue
 
-                if not remember(f"dm:{mid}"):
+                if not remember(f"dm:{sender_id}:{text}"):
                     continue
 
-                ai_reply = generate_reply(text, channel="dm")
-                send_message(sender_id, ai_reply)
+                reply = generate_reply(text, channel="dm")
+                send_message(sender_id, reply)
 
-        # ====== Comments (Feed) ======
+        # ====== تعليقات ======
         if "changes" in entry:
-            for change in entry.get("changes", []):
+            for change in entry["changes"]:
+
                 if change.get("field") != "feed":
                     continue
 
                 value = change.get("value", {})
-                item = value.get("item")
-
-                # نرد فقط على التعليقات
-                if item != "comment":
-                    continue
 
                 comment_id = value.get("comment_id")
                 comment_text = value.get("message")
+                item = value.get("item")
+
+                # نتأكد أنه تعليق حقيقي
+                if item != "comment":
+                    continue
 
                 if not comment_id or not comment_text:
                     continue
@@ -123,49 +109,32 @@ def webhook():
                 if not remember(f"comment:{comment_id}"):
                     continue
 
-                ai_reply = generate_reply(comment_text, channel="comment")
-                reply_to_comment(comment_id, ai_reply)
+                reply = generate_reply(comment_text, channel="comment")
+                reply_to_comment(comment_id, reply)
 
     return "OK", 200
 
 
 # ===============================
-# 📤 Send DM (Messenger)
+# 📤 Send DM
 # ===============================
-def send_message(recipient_id: str, text: str):
-    if not PAGE_ACCESS_TOKEN:
-        return
-
+def send_message(recipient_id, text):
     url = "https://graph.facebook.com/v18.0/me/messages"
     params = {"access_token": PAGE_ACCESS_TOKEN}
-    payload = {"recipient": {"id": recipient_id}, "message": {"text": text}}
+    payload = {
+        "recipient": {"id": recipient_id},
+        "message": {"text": text}
+    }
 
-    try:
-        requests.post(url, params=params, json=payload, timeout=20)
-    except:
-        pass
+    requests.post(url, params=params, json=payload)
 
 
 # ===============================
-# 💬 Reply to Comment (Facebook)
+# 💬 Reply to Comment
 # ===============================
-def reply_to_comment(comment_id: str, message_text: str):
-    if not PAGE_ACCESS_TOKEN:
-        return
-
+def reply_to_comment(comment_id, text):
     url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
     params = {"access_token": PAGE_ACCESS_TOKEN}
-    payload = {"message": message_text}
+    payload = {"message": text}
 
-    try:
-        requests.post(url, params=params, json=payload, timeout=20)
-    except:
-        pass
-
-
-# ===============================
-# ▶ Run
-# ===============================
-if __name__ == "__main__":
-    threading.Thread(target=keep_alive, daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
+    requests.post(url, params=params, json=payload)
