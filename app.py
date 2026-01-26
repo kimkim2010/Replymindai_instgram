@@ -5,30 +5,23 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# =========================
-# ENV VARIABLES
-# =========================
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
-
-FB_PAGE_ACCESS_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN")
-IG_PAGE_ACCESS_TOKEN = os.environ.get("IG_PAGE_ACCESS_TOKEN")
-IG_USER_ID = os.environ.get("IG_USER_ID")
-
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# ========= ENV =========
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
+FB_PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")   # EAAG... (Messenger/Page)
+IG_ACCESS_TOKEN = os.getenv("IG_ACCESS_TOKEN", "")             # EAAG... (Instagram use case token)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# =========================
-# HOME
-# =========================
+GRAPH_VERSION = "v19.0"
+
+
 @app.route("/", methods=["GET"])
 def home():
     return "ReplyMindAI running 🚀", 200
 
 
-# =========================
-# WEBHOOK VERIFY
-# =========================
+# ========= Webhook Verify =========
 @app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
@@ -40,106 +33,80 @@ def verify():
     return "Verification failed", 403
 
 
-# =========================
-# WEBHOOK RECEIVE
-# =========================
+# ========= Webhook Receiver =========
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     print("Incoming:", data)
 
-    # -------- Messenger --------
-    if data.get("object") == "page":
+    obj = data.get("object")
+
+    # ---- Messenger (Facebook Page) ----
+    if obj == "page":
         for entry in data.get("entry", []):
-            for event in entry.get("messaging", []):
-                if "message" in event and not event["message"].get("is_echo"):
-                    sender_id = event["sender"]["id"]
-                    text = event["message"].get("text")
+            for messaging_event in entry.get("messaging", []):
+                if "message" in messaging_event and "text" in messaging_event["message"]:
+                    sender_id = messaging_event["sender"]["id"]
+                    text = messaging_event["message"]["text"]
+                    reply = generate_ai_reply(text)
+                    send_messenger(sender_id, reply)
 
-                    if text:
-                        reply = generate_ai_reply(text)
-                        send_facebook_message(sender_id, reply)
-
-    # -------- Instagram --------
-    elif data.get("object") == "instagram":
+    # ---- Instagram ----
+    elif obj == "instagram":
         for entry in data.get("entry", []):
-            for event in entry.get("messaging", []):
-                if "message" in event and not event["message"].get("is_echo"):
-                    sender_id = event["sender"]["id"]
-                    text = event["message"].get("text")
-
-                    if text:
-                        reply = generate_ai_reply(text)
-                        send_instagram_message(sender_id, reply)
+            for messaging_event in entry.get("messaging", []):
+                if "message" in messaging_event and "text" in messaging_event["message"]:
+                    sender_id = messaging_event["sender"]["id"]
+                    text = messaging_event["message"]["text"]
+                    reply = generate_ai_reply(text)
+                    send_instagram(sender_id, reply)
 
     return "ok", 200
 
 
-# =========================
-# OPENAI RESPONSE
-# =========================
-def generate_ai_reply(user_message):
+# ========= OpenAI Reply =========
+def generate_ai_reply(user_message: str) -> str:
     try:
-        response = client.chat.completions.create(
+        res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": "أنت مساعد ذكي احترافي يرد بأسلوب واثق وجذاب يعكس قوة شركة تقنية."
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ]
+                {"role": "system", "content": "أنت مساعد ذكي احترافي يرد بأسلوب واثق، جذاب، ومقنع."},
+                {"role": "user", "content": user_message},
+            ],
         )
-        return response.choices[0].message.content
-
+        return res.choices[0].message.content.strip()
     except Exception as e:
         print("OpenAI error:", e)
-        return "حدث خطأ مؤقت، حاول لاحقاً."
+        return "صار خطأ مؤقت. جرّب بعد شوي."
 
 
-# =========================
-# SEND MESSENGER
-# =========================
-def send_facebook_message(recipient_id, message_text):
-    url = "https://graph.facebook.com/v19.0/me/messages"
+# ========= Send to Messenger =========
+def send_messenger(recipient_id: str, message_text: str):
+    if not FB_PAGE_ACCESS_TOKEN:
+        print("Messenger error: FB_PAGE_ACCESS_TOKEN is missing")
+        return
 
-    params = {
-        "access_token": FB_PAGE_ACCESS_TOKEN
-    }
+    url = f"https://graph.facebook.com/{GRAPH_VERSION}/me/messages"
+    params = {"access_token": FB_PAGE_ACCESS_TOKEN}
+    payload = {"recipient": {"id": recipient_id}, "message": {"text": message_text}}
 
-    payload = {
-        "recipient": {"id": recipient_id},
-        "message": {"text": message_text}
-    }
-
-    response = requests.post(url, params=params, json=payload)
-    print("Messenger response:", response.text)
+    r = requests.post(url, params=params, json=payload, timeout=20)
+    print("Messenger response:", r.text)
 
 
-# =========================
-# SEND INSTAGRAM
-# =========================
-def send_instagram_message(recipient_id, message_text):
-    url = f"https://graph.facebook.com/v19.0/{IG_USER_ID}/messages"
+# ========= Send to Instagram =========
+def send_instagram(recipient_id: str, message_text: str):
+    if not IG_ACCESS_TOKEN:
+        print("Instagram error: IG_ACCESS_TOKEN is missing")
+        return
 
-    params = {
-        "access_token": IG_PAGE_ACCESS_TOKEN
-    }
+    url = f"https://graph.facebook.com/{GRAPH_VERSION}/me/messages"
+    params = {"access_token": IG_ACCESS_TOKEN}
+    payload = {"recipient": {"id": recipient_id}, "message": {"text": message_text}}
 
-    payload = {
-        "recipient": {"id": recipient_id},
-        "message": {"text": message_text}
-    }
-
-    response = requests.post(url, params=params, json=payload)
-    print("Instagram response:", response.text)
+    r = requests.post(url, params=params, json=payload, timeout=20)
+    print("Instagram response:", r.text)
 
 
-# =========================
-# RUN
-# =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
