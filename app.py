@@ -5,34 +5,37 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# OpenAI client
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
+# ====== ENV VARIABLES ======
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 
+print("VERIFY_TOKEN:", VERIFY_TOKEN)
+print("PAGE_ACCESS_TOKEN موجود؟", "YES" if PAGE_ACCESS_TOKEN else "NO")
 
-# 🔹 الصفحة الرئيسية
+# ====== OpenAI ======
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+
+# ====== HOME ======
 @app.route("/", methods=["GET"])
 def home():
     return "ReplyMindAI running 🚀"
 
 
-# 🔹 التحقق من الويبهوك (Meta verification)
+# ====== WEBHOOK VERIFICATION ======
 @app.route("/webhook", methods=["GET"])
 def verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    if mode and token:
-        if mode == "subscribe" and token == VERIFY_TOKEN:
-            return challenge, 200
-        else:
-            return "Verification failed", 403
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+    return "Verification failed", 403
 
 
-# 🔹 استقبال الرسائل
+# ====== RECEIVE MESSAGES ======
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
@@ -41,7 +44,12 @@ def webhook():
     if data.get("object") == "instagram":
         for entry in data.get("entry", []):
             for messaging_event in entry.get("messaging", []):
-                if "message" in messaging_event:
+
+                # تجاهل الرسائل المرتدة من البوت نفسه
+                if (
+                    "message" in messaging_event
+                    and not messaging_event["message"].get("is_echo")
+                ):
                     sender_id = messaging_event["sender"]["id"]
                     message_text = messaging_event["message"].get("text")
 
@@ -52,7 +60,7 @@ def webhook():
     return "ok", 200
 
 
-# 🔹 توليد رد من OpenAI
+# ====== OPENAI REPLY ======
 def generate_ai_reply(user_message):
     try:
         response = client.chat.completions.create(
@@ -76,9 +84,10 @@ def generate_ai_reply(user_message):
         return "حدث خطأ مؤقت، حاول مرة أخرى لاحقاً."
 
 
-# 🔹 إرسال الرسالة للانستغرام
+# ====== SEND MESSAGE TO INSTAGRAM ======
 def send_message(recipient_id, message_text):
     url = "https://graph.facebook.com/v19.0/me/messages"
+
     params = {
         "access_token": PAGE_ACCESS_TOKEN
     }
@@ -89,8 +98,10 @@ def send_message(recipient_id, message_text):
     }
 
     response = requests.post(url, params=params, json=payload)
+
     print("Send response:", response.text)
 
 
+# ====== RUN ======
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=10000)
