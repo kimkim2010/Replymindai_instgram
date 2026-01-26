@@ -106,20 +106,20 @@ def webhook():
                 if change.get("field") != "feed":
                     continue
 
-                val = change.get("value", {})
-                # تعليق جديد
-                comment_id = val.get("comment_id") or val.get("post_id")
-                comment_text = val.get("message")
-                item = val.get("item")
+                value = change.get("value", {})
+                item = value.get("item")
 
-                # نتأكد أنه تعليق (أفضلية)
-               if item != "comment":
+                # نرد فقط على التعليقات
+                if item != "comment":
                     continue
+
+                comment_id = value.get("comment_id")
+                comment_text = value.get("message")
 
                 if not comment_id or not comment_text:
                     continue
 
-                if not remember(f"comment:{comment_id}:{hash(comment_text)}"):
+                if not remember(f"comment:{comment_id}"):
                     continue
 
                 ai_reply = generate_reply(comment_text, channel="comment")
