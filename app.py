@@ -1,195 +1,159 @@
-from flask import Flask, request
 import os
-import requests
-import threading
 import time
-from sales_ai import generate_reply
+import requests
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# ===============================
+# =========================================
 # 🔐 Environment Variables
-# ===============================
+# =========================================
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "")
 PAGE_ACCESS_TOKEN = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "")
 
-# ===============================
-# 🧠 Anti Duplicate System
-# ===============================
-SEEN = {}
-SEEN_TTL = 120  # seconds
+GRAPH_URL = "https://graph.facebook.com/v24.0"
+
+# =========================================
+# 🧠 OpenAI Setup
+# =========================================
+from openai import OpenAI
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-def remember(key: str) -> bool:
-    now = time.time()
-
-    # تنظيف القديم
-    for k, ts in list(SEEN.items()):
-        if now - ts > SEEN_TTL:
-            SEEN.pop(k, None)
-
-    if key in SEEN:
-        return False
-
-    SEEN[key] = now
-    return True
-
-
-# ===============================
-# ❤️ Keep Alive (Render)
-# ===============================
-def keep_alive():
-    while True:
-        try:
-            if RENDER_URL:
-                requests.get(RENDER_URL, timeout=10)
-        except:
-            pass
-        time.sleep(300)
-
-
-# ===============================
-# 🏠 Health Check
-# ===============================
+# =========================================
+# 🏥 Health Check
+# =========================================
 @app.route("/", methods=["GET"])
 def home():
-    return "ReplyMindAI running ✅", 200
+    return "🔥 ReplyMindAI 24/7 Running", 200
 
 
-# ===============================
+# =========================================
 # ✅ Webhook Verification
-# ===============================
+# =========================================
 @app.route("/webhook", methods=["GET"])
 def verify():
-    mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
+    if token == VERIFY_TOKEN:
+        print("✅ Webhook verified")
         return challenge, 200
 
-    return "Verification failed", 403
+    print("❌ Verification failed")
+    return "Invalid token", 403
 
 
-# ===============================
+# =========================================
 # 📩 Webhook Receiver
-# ===============================
+# =========================================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(silent=True) or {}
+    print("📥 Incoming webhook:", data)
 
-    print("🔥 WEBHOOK DATA:", data)
+    try:
+        if data.get("object") != "page":
+            return "OK", 200
 
-    if data.get("object") != "page":
+        for entry in data.get("entry", []):
+            if "messaging" in entry:
+                for event in entry["messaging"]:
+
+                    if event.get("message", {}).get("is_echo"):
+                        continue
+
+                    sender_id = event.get("sender", {}).get("id")
+                    message = event.get("message", {})
+                    text = message.get("text")
+
+                    if sender_id and text:
+                        print(f"💬 New DM: {text}")
+
+                        reply = safe_generate_reply(text)
+                        send_message(sender_id, reply)
+
         return "OK", 200
 
-    for entry in data.get("entry", []):
-
-        # ====================================
-        # 💬 Messenger DM
-        # ====================================
-        if "messaging" in entry:
-            for event in entry.get("messaging", []):
-
-                if event.get("message", {}).get("is_echo"):
-                    continue
-
-                msg = event.get("message", {})
-                text = msg.get("text")
-                sender_id = event.get("sender", {}).get("id")
-
-                if not text or not sender_id:
-                    continue
-
-                mid = msg.get("mid", f"{sender_id}:{hash(text)}")
-
-                if not remember(f"dm:{mid}"):
-                    continue
-
-                print("📨 New DM:", text)
-
-                ai_reply = generate_reply(text, channel="dm")
-                send_message(sender_id, ai_reply)
-
-        # ====================================
-        # 💬 Facebook Comments
-        # ====================================
-        if "changes" in entry:
-            for change in entry.get("changes", []):
-
-                if change.get("field") != "feed":
-                    continue
-
-                val = change.get("value", {})
-                item = val.get("item")
-                verb = val.get("verb")
-
-                # نرد فقط على التعليقات الجديدة
-                if item != "comment" or verb != "add":
-                    continue
-
-                comment_id = val.get("comment_id")
-                comment_text = val.get("message")
-
-                if not comment_id or not comment_text:
-                    continue
-
-                if not remember(f"comment:{comment_id}"):
-                    continue
-
-                print("💬 New Comment:", comment_text)
-
-                ai_reply = generate_reply(comment_text, channel="comment")
-                reply_to_comment(comment_id, ai_reply)
-
-    return "OK", 200
+    except Exception as e:
+        print("🔥 Webhook crash prevented:", str(e))
+        return "OK", 200   # never return 500
 
 
-# ===============================
+# =========================================
+# 🧠 AI Generator (Safe Version)
+# =========================================
+def safe_generate_reply(user_text):
+
+    fallback = (
+        "👋 أهلًا وسهلًا بك في خدمة العملاء\n\n"
+        "📌 تم استلام رسالتك بنجاح.\n"
+        "لو سمحت اكتب: (سعر / تفاصيل / طلب)\n"
+        "وسنخدمك فورًا 🤝"
+    )
+
+    if not OPENAI_API_KEY:
+        print("⚠️ No OpenAI key set")
+        return fallback
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a professional business assistant."},
+                {"role": "user", "content": user_text}
+            ],
+            timeout=20
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        print("⚠️ AI error:", str(e))
+
+        # إذا 429 quota
+        if "insufficient_quota" in str(e) or "429" in str(e):
+            print("🚨 OpenAI quota exceeded")
+            return (
+                "⚠️ حالياً النظام الذكي غير متاح.\n"
+                "يرجى المحاولة لاحقًا أو التواصل مع الإدارة مباشرة."
+            )
+
+        return fallback
+
+
+# =========================================
 # 📤 Send Messenger Message
-# ===============================
-def send_message(recipient_id: str, text: str):
+# =========================================
+def send_message(recipient_id, text):
+
     if not PAGE_ACCESS_TOKEN:
         print("❌ Missing PAGE_ACCESS_TOKEN")
-        return
+        return False
 
-    url = "https://graph.facebook.com/v18.0/me/messages"
-    params = {"access_token": PAGE_ACCESS_TOKEN}
+    url = f"{GRAPH_URL}/me/messages"
     payload = {
         "recipient": {"id": recipient_id},
-        "message": {"text": text}
+        "message": {"text": text},
+        "access_token": PAGE_ACCESS_TOKEN
     }
 
     try:
-        response = requests.post(url, params=params, json=payload, timeout=20)
-        print("📤 DM Sent:", response.status_code, response.text)
+        r = requests.post(url, json=payload, timeout=15)
+        print("📤 Messenger status:", r.status_code)
+        print("📨 Messenger response:", r.text)
+        return r.status_code == 200
+
     except Exception as e:
-        print("❌ DM Error:", e)
+        print("❌ Messenger send error:", str(e))
+        return False
 
 
-# ===============================
-# 💬 Reply to Comment
-# ===============================
-def reply_to_comment(comment_id: str, message_text: str):
-    if not PAGE_ACCESS_TOKEN:
-        print("❌ Missing PAGE_ACCESS_TOKEN")
-        return
-
-    url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
-    params = {"access_token": PAGE_ACCESS_TOKEN}
-    payload = {"message": message_text}
-
-    try:
-        response = requests.post(url, params=params, json=payload, timeout=20)
-        print("💬 Comment Reply Sent:", response.status_code, response.text)
-    except Exception as e:
-        print("❌ Comment Reply Error:", e)
-
-
-# ===============================
-# ▶️ Run App
-# ===============================
+# =========================================
+# 🚀 Run
+# =========================================
 if __name__ == "__main__":
-    threading.Thread(target=keep_alive, daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
