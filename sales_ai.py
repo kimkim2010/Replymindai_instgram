@@ -1,15 +1,18 @@
-import requests
 import os
+import requests
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+MODEL = "gemini-2.5-flash"  # موديل موجود فعلياً عندك
 
 SYSTEM_PROMPT = """
 أنت المساعد الرسمي لشركة ReplyMindAi 🤖🔥
 
 🎯 هويتك:
-- شركة ذكاء اصطناعي حديثة
-- أسلوب احترافي عالمي
-- تنسيق جميل وسمايلات راقية ✨
+- شركة ذكاء اصطناعي وتقنيات حديثة
+- أسسني المهندس Kimichi 👨‍💻
+- أسلوبي رسمي، احترافي، ذكي، عالمي
+- أستخدم تنسيق مرتب وسمايلات راقية ✨
 
 💼 الأسعار:
 • بوت فيسبوك: 50€
@@ -19,51 +22,56 @@ SYSTEM_PROMPT = """
 
 🔥 العروض:
 • انستقرام + فيسبوك: 90€
-• الثلاثة معاً: 130€
+• انستقرام + فيسبوك + واتساب: 130€
 
 📞 التواصل:
 WhatsApp: +1 (615) 425-1716
 Gmail: replyrindai@gmail.com
+Telegram Bot: http://t.me/ReplyMindAl_bot
+Website: https://rewplay-mind-ai-wepseit.vercel.app/
+Instagram: @replymindai
 
 اجعل الرد:
-- ذكي جداً
-- مقنع
-- منظم
+- منظم ✨
 - احترافي
+- مقنع
+- فيه سمايلات خفيفة
+- غير ممل
 """
 
 def generate_reply(user_message):
-
     try:
-        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={GEMINI_API_KEY}"
 
         payload = {
             "contents": [
                 {
                     "parts": [
-                        {"text": SYSTEM_PROMPT + "\n\nUser: " + user_message}
+                        {"text": SYSTEM_PROMPT + "\n\nالمستخدم: " + user_message}
                     ]
                 }
-            ]
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "topP": 0.95,
+                "maxOutputTokens": 800
+            }
         }
 
-        response = requests.post(url, json=payload, timeout=15)
-        result = response.json()
+        headers = {
+            "Content-Type": "application/json"
+        }
 
-        print("🔎 Gemini Raw:", result)
+        response = requests.post(url, headers=headers, json=payload)
+        data = response.json()
 
-        # حماية كاملة ضد errors
-        if "candidates" in result:
-            candidates = result["candidates"]
+        # 🔥 حماية ضد أي خطأ من Gemini
+        if "candidates" not in data:
+            print("Gemini Raw Error:", data)
+            return "⚠️ حدث خطأ تقني مؤقت، يرجى المحاولة لاحقاً."
 
-            if len(candidates) > 0:
-                parts = candidates[0]["content"]["parts"]
-                if len(parts) > 0:
-                    return parts[0]["text"]
-
-        # fallback احترافي
-        return "⚠️ حالياً النظام مشغول قليلاً، أعد المحاولة خلال لحظات."
+        return data["candidates"][0]["content"]["parts"][0]["text"]
 
     except Exception as e:
-        print("🔥 Gemini Crash:", e)
-        return "⚠️ حدث خطأ مؤقت في النظام."
+        print("Gemini Exception:", e)
+        return "⚠️ النظام يمر بتحديث مؤقت، حاول بعد لحظات."
