@@ -13,21 +13,21 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # ===============================
-# 🛡️ منع النوم - Self Ping
+# 🔥 منع النوم - Self Ping
 # ===============================
 def keep_alive():
     while True:
         try:
             if RENDER_URL:
                 requests.get(RENDER_URL)
-                print("🔥 Self-Ping Sent Successfully")
+                print("🔥 Self-Ping Sent")
         except Exception as e:
-            print("⚠️ Self-Ping Failed:", e)
+            print("⚠️ Ping Error:", e)
         time.sleep(300)
 
 
 # ===============================
-# 🏠 Home (عشان ما يعطي 404)
+# 🏠 Home Route
 # ===============================
 @app.route("/", methods=["GET"])
 def home():
@@ -44,50 +44,61 @@ def verify():
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook Verified Successfully")
+        print("✅ Webhook Verified")
         return challenge, 200
-    return "❌ Verification Failed", 403
+
+    return "Verification Failed", 403
 
 
 # ===============================
-# 📩 استقبال رسائل Messenger
+# 📩 Messenger Webhook
 # ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
+    try:
+        data = request.json
 
-    if data.get("object") == "page":
-        for entry in data.get("entry", []):
-            for messaging in entry.get("messaging", []):
-                sender_id = messaging["sender"]["id"]
+        if data.get("object") == "page":
+            for entry in data.get("entry", []):
+                for messaging in entry.get("messaging", []):
+                    sender_id = messaging["sender"]["id"]
 
-                if "message" in messaging and "text" in messaging["message"]:
-                    user_message = messaging["message"]["text"]
-                    print("📩 Incoming Message:", user_message)
+                    if "message" in messaging and "text" in messaging["message"]:
+                        user_message = messaging["message"]["text"]
+                        print("📩 Incoming:", user_message)
 
-                    ai_reply = generate_reply(user_message)
-                    send_message(sender_id, ai_reply)
+                        ai_reply = generate_reply(user_message)
 
-    return "OK", 200
+                        send_message(sender_id, ai_reply)
+
+        return "OK", 200
+
+    except Exception as e:
+        print("🔥 Webhook Fatal Error:", e)
+        return "OK", 200  # مهم جداً حتى ما يصير 500
 
 
 # ===============================
-# 🚀 إرسال الرد إلى فيسبوك
+# 🚀 Send Message
 # ===============================
 def send_message(recipient_id, message_text):
-    url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
+    try:
+        url = f"https://graph.facebook.com/v18.0/me/messages?access_token={PAGE_ACCESS_TOKEN}"
 
-    payload = {
-        "recipient": {"id": recipient_id},
-        "message": {"text": message_text}
-    }
+        payload = {
+            "recipient": {"id": recipient_id},
+            "message": {"text": message_text}
+        }
 
-    requests.post(url, json=payload)
-    print("💬 Reply Sent Successfully")
+        requests.post(url, json=payload)
+        print("💬 Reply Sent")
+
+    except Exception as e:
+        print("❌ Facebook Send Error:", e)
 
 
 # ===============================
-# 🏁 تشغيل السيرفر
+# 🏁 Run Server
 # ===============================
 if __name__ == "__main__":
     threading.Thread(target=keep_alive).start()
