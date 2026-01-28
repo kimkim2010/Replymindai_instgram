@@ -23,7 +23,15 @@ def keep_alive():
                 print("🔥 Self-Ping Sent Successfully")
         except Exception as e:
             print("⚠️ Self-Ping Failed:", e)
-        time.sleep(300)  # كل 5 دقائق
+        time.sleep(300)
+
+
+# ===============================
+# 🏠 Home (عشان ما يعطي 404)
+# ===============================
+@app.route("/", methods=["GET"])
+def home():
+    return "ReplyMindAI Running 🔥", 200
 
 
 # ===============================
