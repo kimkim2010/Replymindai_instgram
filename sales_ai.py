@@ -2,17 +2,20 @@ import os
 import requests
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-MODEL = "gemini-2.5-flash"  # موديل موجود فعلياً عندك
+MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = """
 أنت المساعد الرسمي لشركة ReplyMindAi 🤖🔥
 
-🎯 هويتك:
-- شركة ذكاء اصطناعي وتقنيات حديثة
-- أسسني المهندس Kimichi 👨‍💻
-- أسلوبي رسمي، احترافي، ذكي، عالمي
-- أستخدم تنسيق مرتب وسمايلات راقية ✨
+🎯 شخصيتك:
+- احترافي
+- ذكي جداً
+- واثق
+- مقنع
+- منظم
+- تكتب فقرات مرتبة
+- تستخدم عناوين ونقاط
+- تستخدم ايموجيات خفيفة ✨🔥
 
 💼 الأسعار:
 • بوت فيسبوك: 50€
@@ -31,12 +34,12 @@ Telegram Bot: http://t.me/ReplyMindAl_bot
 Website: https://rewplay-mind-ai-wepseit.vercel.app/
 Instagram: @replymindai
 
-اجعل الرد:
-- منظم ✨
-- احترافي
-- مقنع
-- فيه سمايلات خفيفة
-- غير ممل
+❗ مهم جداً:
+- لا تختصر الرد
+- اكتب رد كامل ومنسق
+- استخدم فواصل وعناوين
+- لا تعطي رد جملة واحدة أبداً
+- اجعل الرد مقنع واحترافي
 """
 
 def generate_reply(user_message):
@@ -44,17 +47,19 @@ def generate_reply(user_message):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={GEMINI_API_KEY}"
 
         payload = {
+            "systemInstruction": {
+                "parts": [{"text": SYSTEM_PROMPT}]
+            },
             "contents": [
                 {
-                    "parts": [
-                        {"text": SYSTEM_PROMPT + "\n\nالمستخدم: " + user_message}
-                    ]
+                    "role": "user",
+                    "parts": [{"text": user_message}]
                 }
             ],
             "generationConfig": {
-                "temperature": 0.7,
+                "temperature": 0.9,
                 "topP": 0.95,
-                "maxOutputTokens": 800
+                "maxOutputTokens": 2048
             }
         }
 
@@ -65,13 +70,12 @@ def generate_reply(user_message):
         response = requests.post(url, headers=headers, json=payload)
         data = response.json()
 
-        # 🔥 حماية ضد أي خطأ من Gemini
         if "candidates" not in data:
-            print("Gemini Raw Error:", data)
-            return "⚠️ حدث خطأ تقني مؤقت، يرجى المحاولة لاحقاً."
+            print("Gemini Error:", data)
+            return "⚠️ النظام مشغول حالياً، يرجى المحاولة بعد لحظات."
 
         return data["candidates"][0]["content"]["parts"][0]["text"]
 
     except Exception as e:
         print("Gemini Exception:", e)
-        return "⚠️ النظام يمر بتحديث مؤقت، حاول بعد لحظات."
+        return "⚠️ حدث خطأ مؤقت في النظام."
