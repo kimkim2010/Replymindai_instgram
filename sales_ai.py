@@ -1,5 +1,5 @@
-import requests
 import os
+import requests
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -37,10 +37,9 @@ Instagram: @replymindai
 - غير ممل
 """
 
-
 def generate_reply(user_message):
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     headers = {
         "Content-Type": "application/json"
@@ -56,10 +55,12 @@ def generate_reply(user_message):
         ]
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-
     try:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except:
-        print("Gemini Error:", response.text)
-        return "⚠️ حدث خطأ مؤقت، حاول مرة أخرى."
+        response = requests.post(url, headers=headers, json=payload)
+        result = response.json()
+
+        return result["candidates"][0]["content"]["parts"][0]["text"]
+
+    except Exception as e:
+        print("Gemini Error:", e)
+        return "⚠️ حدث خطأ مؤقت، يرجى المحاولة لاحقاً."
