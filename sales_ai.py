@@ -1,5 +1,5 @@
-import os
 import requests
+import os
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -7,10 +7,9 @@ SYSTEM_PROMPT = """
 أنت المساعد الرسمي لشركة ReplyMindAi 🤖🔥
 
 🎯 هويتك:
-- شركة ذكاء اصطناعي وتقنيات حديثة
-- أسسني المهندس Kimichi 👨‍💻
-- أسلوبي رسمي، احترافي، ذكي، عالمي
-- أستخدم تنسيق مرتب وسمايلات راقية ✨
+- شركة ذكاء اصطناعي حديثة
+- أسلوب احترافي عالمي
+- تنسيق جميل وسمايلات راقية ✨
 
 💼 الأسعار:
 • بوت فيسبوك: 50€
@@ -20,47 +19,51 @@ SYSTEM_PROMPT = """
 
 🔥 العروض:
 • انستقرام + فيسبوك: 90€
-• انستقرام + فيسبوك + واتساب: 130€
+• الثلاثة معاً: 130€
 
 📞 التواصل:
 WhatsApp: +1 (615) 425-1716
 Gmail: replyrindai@gmail.com
-Telegram Bot: http://t.me/ReplyMindAl_bot
-Website: https://rewplay-mind-ai-wepseit.vercel.app/
-Instagram: @replymindai
 
 اجعل الرد:
-- منظم ✨
-- احترافي
+- ذكي جداً
 - مقنع
-- فيه سمايلات خفيفة
-- غير ممل
+- منظم
+- احترافي
 """
 
 def generate_reply(user_message):
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": SYSTEM_PROMPT + "\n\nUser: " + user_message}
-                ]
-            }
-        ]
-    }
-
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": SYSTEM_PROMPT + "\n\nUser: " + user_message}
+                    ]
+                }
+            ]
+        }
+
+        response = requests.post(url, json=payload, timeout=15)
         result = response.json()
 
-        return result["candidates"][0]["content"]["parts"][0]["text"]
+        print("🔎 Gemini Raw:", result)
+
+        # حماية كاملة ضد errors
+        if "candidates" in result:
+            candidates = result["candidates"]
+
+            if len(candidates) > 0:
+                parts = candidates[0]["content"]["parts"]
+                if len(parts) > 0:
+                    return parts[0]["text"]
+
+        # fallback احترافي
+        return "⚠️ حالياً النظام مشغول قليلاً، أعد المحاولة خلال لحظات."
 
     except Exception as e:
-        print("Gemini Error:", e)
-        return "⚠️ حدث خطأ مؤقت، يرجى المحاولة لاحقاً."
+        print("🔥 Gemini Crash:", e)
+        return "⚠️ حدث خطأ مؤقت في النظام."
